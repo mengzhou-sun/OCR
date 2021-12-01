@@ -1,0 +1,192 @@
+from sklearn.model_selection import train_test_split
+import os
+import torchvision as tv
+import numpy as np
+import cv2
+import xml.etree.ElementTree as ET
+from PIL import Image
+from torch.utils.data import Dataset
+import pandas as pd
+
+IMG_WIDTH = 1011
+class Image_Dataset_Dataload(Dataset):
+    def __init__(self, images_dir,  labels_dir, transformImage,list_name):
+        self.list_name = list_name
+        self.images_dir = images_dir
+        self.labels_dir = labels_dir
+        self.transformI = transformImage
+        self.OUTPUT_MAX_LEN=100
+    def __len__(self):
+        return len(self.list_name)
+
+    def __getitem__(self, idx):
+
+        global  width, img_width, labell, text, new
+        image=[]
+        label = []
+        list_B = []
+        image_name = self.list_name[idx]
+        root = ET.fromstring(open(self.labels_dir + '/' + image_name + '.XML','rb').read())
+        for TopMargin in root.iter('{http://www.loc.gov/standards/alto/ns-v2#}String'):
+            del TopMargin.attrib['ID']
+            del TopMargin.attrib['HPOS']
+            del TopMargin.attrib['VPOS']
+            del TopMargin.attrib['HEIGHT']
+            del TopMargin.attrib['WIDTH']
+            label.append(TopMargin.attrib)
+        root1 = ET.fromstring(open(self.labels_dir + '/' + image_name + '.XML').read())
+        for TopMargin in root1.iter('{http://www.loc.gov/standards/alto/ns-v2#}String'):
+            del TopMargin.attrib['ID']
+            del TopMargin.attrib['CONTENT']
+            image.append(TopMargin.attrib)
+        for i in range(len(image)):
+            list_boundingbox = ((list(map(int, (image[i].values())))))
+            list_B.append(list_boundingbox)
+        boundingbox_array = np.array(list_B)
+        img = Image.open(self.images_dir + '/' + image_name + '.png')
+        cv2_img = np.asarray(img)
+        #cv2_img=cv2.cvtColor(cv2_img,cv2.COLOR_BGR2GRAY)
+        label1=[]
+        image=[]
+        imagesum=[]
+        text=[]
+        labell=[]
+        label_len=[]
+        a,b=boundingbox_array.shape
+
+        for i in range(a):
+            cut=cv2_img[boundingbox_array[i][2]:boundingbox_array[i][2]+ boundingbox_array[i][0],boundingbox_array[i][1]:boundingbox_array[i][1]+boundingbox_array[i][3]]
+            image.append(cut)
+
+        while {} in (label,image):
+         label.remove({})
+         image.remove({})
+        for i in range(len(label)):
+            label1.append(label[i]['CONTENT'])
+            if self.transformI is not None:
+                rate = 64 / image[i].shape[0]
+                new=cv2.resize(image[i], (int(image[i].shape[1] *rate)+1, 64))
+                print('cccc',new.shape)
+                imagesum.append(new)
+
+                #img_width.append(new.shape[1])
+            a=[i[:-1].split(' ') for i in label1]
+            word=a[i]
+            text.append(word)
+
+            c=(''.join(label1[i]))
+            w=self.label_len(c)
+            label_len.append(w)
+            labell.append(self.label_padding(c,num_tokens))
+
+        return text,imagesum,labell,label_len
+    def label_len(self,labels):
+        ll = [letter2index[i] for i in labels]
+        len_label = (len(ll))
+
+        return len_label
+
+
+    def label_padding(self,labels,num_tokens):
+        ll = [letter2index[i] for i in labels]
+        num = self.OUTPUT_MAX_LEN - len(ll) - 2
+        ll = np.array(ll) + num_tokens
+        ll = list(ll)
+        ll = [tokens['GO_TOKEN']] + ll + [tokens['END_TOKEN']]
+        if not num == 0:
+            ll.extend([tokens['PAD_TOKEN']] * num)
+        return ll
+alphabet = [
+     ' go' ,' end',' pad' , ' ,',' ', '!','%', '"', '*','#','/', "'", '(', ')', ',', '-', '.',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';',
+    '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K','Ë',
+    'L', 'M', 'N', 'O', 'Ö','P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y','Ü',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+    'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+    'y', 'z','ü','ʒ','ſ','ö','ÿ','§','~','v̈','̈','ä','=','@','Q','ë','$','&','Ʒ','ẅ','å'
+]
+
+
+
+letter2index = {label: n for n, label in enumerate(alphabet)}
+image_name = []
+tokens = {'GO_TOKEN': 0, 'END_TOKEN': 1, 'PAD_TOKEN': 2}
+num_tokens = len(tokens.keys())
+path = 'D:/dataset'
+path1 = 'D:/alto'
+for root, dirs, files in os.walk(path):
+    for name in files:
+        image_name.append(name.split('.')[0])
+train, validation = train_test_split(image_name, train_size=0.68,test_size=0.32, random_state=42)
+def get_train_dataset():
+    #TODO
+    transform_train1 = tv.transforms.Compose([
+        tv.transforms.ToPILImage(),
+        tv.transforms.Resize((128,512)),
+        tv.transforms.ToTensor()
+
+        ]
+    )
+    return Image_Dataset_Dataload(images_dir=path, labels_dir=path1, transformImage=transform_train1, list_name=train)
+def get_test_dataset():
+    #TODO
+    transform_test1 = tv.transforms.Compose([
+        tv.transforms.ToPILImage(),
+        tv.transforms.Resize((128,512)),
+        tv.transforms.ToTensor()
+        #tv.transforms.Normalize(mean=[0.5],std=[0.5])
+        ]
+    )
+    return Image_Dataset_Dataload(images_dir=path, labels_dir=path1, transformImage=transform_test1, list_name=train)
+
+ID='D:/newP'
+IL='D:/newl'
+newl=[]
+e=0
+for i in  range(4):
+   T,pic,l,label_len=Image_Dataset_Dataload(images_dir=path, labels_dir=path1, transformImage=True, list_name=image_name).__getitem__(i)
+   for j in range(len(T)):
+       newl.append(label_len[j])
+
+# p=Image.fromarray(pic[j])
+       # p.save(os.path.join(IL,str(e)+".png"))
+       # newl.append(l[j])
+       # e=e+1
+#
+
+name='labe3_len.csv'
+xml_df = pd.DataFrame(newl)
+xml_df.to_csv(name, index=None)
+
+"""
+file_label_tr = [i[:-1].split(' ') for i in label]
+print(file_label_tr)
+alphabet = [
+     ' ', '!','%', '"', '*','#','/', "'", '(', ')', ',', '-', '.',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';',
+    '?', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+    'L', 'M', 'N', 'O', 'Ö','P', 'R', 'S', 'T', 'U', 'V', 'W', 'Y',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+    'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+    'y', 'z','ü','ʒ','ſ','ö','ÿ',v̈
+]
+a=[]
+letter2index = {label: n for n, label in enumerate(alphabet)}
+for  i in range(len(label)):
+   c=(''.join(label[i]))
+   (a.append(len(c)))
+print(max(a))
+ll = [letter2index[i] for i in c]
+w=torch.tensor(ll)
+num = 90 - len(ll) - 2
+tokens = {'GO_TOKEN': 0, 'END_TOKEN': 1, 'PAD_TOKEN': 2}
+num_tokens = len(tokens.keys())
+ll = np.array(ll) + num_tokens
+ll = list(ll)
+ll = [tokens['GO_TOKEN']] + ll + [tokens['END_TOKEN']]
+if not num == 0:
+            ll.extend([tokens['PAD_TOKEN']] * num)
+print(ll)
+"""
+
+

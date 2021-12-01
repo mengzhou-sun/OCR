@@ -1,0 +1,32 @@
+import torch.nn
+import torch.nn.functional as F
+class GCRNNDecoder(torch.nn.Module):
+    def __init__(self, vocab_size, n_features,out_len):
+        super(GCRNNDecoder, self).__init__()
+        self.lstm1 = torch.nn.LSTM(input_size=n_features,
+        batch_first=True, hidden_size=n_features, bidirectional=True)
+        self.lstm2 = torch.nn.LSTM(input_size=n_features,
+        batch_first=True, hidden_size=n_features, bidirectional=True)
+        self.linear1 = torch.nn.Linear(n_features,n_features)
+        self.linear2 = torch.nn.Linear(n_features, vocab_size)
+        #self.embedding = torch.nn.Embedding(vocab_size,out_len )
+        self.out = torch.nn.Linear(693, out_len)
+        self.tanh = torch.nn.Tanh()
+
+    def forward(self,x):
+        x,_ = torch.max(x,-2)
+
+        x =x.permute(0,2,1)
+        x, (h1,c1) =self.lstm1(x)
+
+        x =x[:,:,:int(x.shape[2]/2)]+x[:,:,int(x.shape[2]/2):]
+        x =self.tanh(self.linear1(x))
+        x, (h2,c2) =self.lstm2(x)
+        x =x[:, :, :int(x.shape[2] /2)] +x[:, :, int(x.shape[2] /2):]
+        x =self.linear2(x)
+        x = x.permute(0, 2, 1)
+        x=self.out(x)
+        x = x.permute(2, 0, 1)
+
+
+        return F.log_softmax(x, dim=2)
